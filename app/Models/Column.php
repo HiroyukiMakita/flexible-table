@@ -3,7 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Column extends Model
 {
@@ -23,11 +23,11 @@ class Column extends Model
 
 
     /**
-     * リレーション：csv を１つ持つ
-     * @return HasOne
+     * リレーション：tables を１つ持つ
+     * @return BelongsTo
      */
-    public function csv(): HasOne
+    public function table(): BelongsTo
     {
-        return $this->hasOne(Csv::class, 'id', 'table_id');
+        return $this->belongsTo(Table::class, 'id', 'table_id');
     }
 }
