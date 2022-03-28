@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
-Route::
-//middleware('auth:api')->
-post('/upload', 'CSVController')->name('upload-csv');
+Route::group(['middleware' => 'auth:api'], static function () {
+});
+Route::post('/upload', 'CSVController')->name('upload-csv');
+Route::post('/matching', 'ConditionController@matching')->name('matching');

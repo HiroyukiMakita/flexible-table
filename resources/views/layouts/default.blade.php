@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
 
-    <title>Laravel</title>
+    <title>@yield('title','Laravel')</title>
 
     <!-- Fonts -->
     <link href="https://fonts.googleapis.com/css?family=Nunito:200,600" rel="stylesheet">
@@ -74,18 +74,19 @@
             margin-bottom: 30px;
         }
 
-        .selected-multi-selector:before {
-            content: '\f00c　';
-            font-family: FontAwesome;
+        .button:hover {
+            cursor: pointer;
+            opacity: 0.6;
         }
 
-        .unselected-multi-selector:before {
-            content: '　　';
-            font-family: FontAwesome;
+        input[type="checkbox"] {
+            transform: scale(1.5);
         }
     </style>
+    @yield('style')
 </head>
 <body>
+@component('components.navbar')@endcomponent
 <div id="app" class="flex-center position-ref full-height">
     @if (Route::has('login'))
         <div class="top-right links">
@@ -101,33 +102,83 @@
         </div>
     @endif
 
-    <div class="content m-5">
-        <csv-component :upload-csv-url="'{{ route('upload-csv') }}'"></csv-component>
+    <div class="container-fluid m-5">
+        @yield('content')
     </div>
 
 </div>
-{{-- Vue (LTS, development mode) --}}
+{{-- Vue (LTS, development mode) VueDevtools はベータ版じゃないと動かない。現状 data 見れない --}}
 <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
 {{-- Vue (LTS, production mode) --}}
 {{--<script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.min.js"></script>--}}
 {{-- Composition API --}}
 <script src="https://cdn.jsdelivr.net/npm/@vue/composition-api@1.4.9"></script>
 {{-- vue-chartjs --}}
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.7.1/Chart.min.js"></script>
-<script src="https://unpkg.com/vue-chartjs/dist/vue-chartjs.min.js"></script>
+{{--<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.7.1/Chart.min.js"></script>--}}
+{{--<script src="https://unpkg.com/vue-chartjs/dist/vue-chartjs.min.js"></script>--}}
 {{-- papa-parse --}}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
 {{-- vuetify --}}
-<script src="https://cdn.jsdelivr.net/npm/vuetify@2.x/dist/vuetify.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/vuetify@2.6.4/dist/vuetify.min.js"></script>
 {{-- axios --}}
 <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
 {{-- dayjs --}}
 <script src="https://unpkg.com/dayjs@1.8.21/dayjs.min.js"></script>
+{{-- JQuery --}}
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
 
 <script type="module">
     const {ref, reactive, onMounted, computed} = VueCompositionAPI;
         {{--import ExampleComponent from '{{asset('js/ExampleComponent.js')}}';--}}
     import CsvComponent from '{{asset('js/CsvComponent.js')}}';
+    import CsvImportParent from '{{asset('js/CsvImportParent.js')}}';
+    import CsvImportChild from '{{asset('js/CsvImportChild.js')}}';
+    import ConditionComponent from '{{asset('js/ConditionComponent.js')}}';
+
+    /** global helpers */
+    // オブジェクトの deep コピー関数
+    window.cloneObject = (object) => JSON.parse(JSON.stringify(object));
+    window.formatJSON = (object) => JSON.stringify(object, null, '\t');
+    // console.log の変わり、オブジェクトだったらフォーマットしてくれる
+    window.debug = (...args) =>
+        console.log(...args.map((arg) => typeof arg === 'object' ? formatJSON(arg) : arg));
+    // eval の 代替
+    window.evalFunction = (string) => (new Function('"use strict";return (' + string + ')'))();
+    window.deepFreeze = (object) => {
+        Object.freeze(object);
+
+        for (const key in object) {
+            const item = object[key];
+
+            if (
+                object.hasOwnProperty(key) &&
+                typeof item === 'object' &&
+                item !== null && !Object.isFrozen(item)
+            ) {
+                window.deepFreeze(item);
+            }
+        }
+        return object;
+    };
+    window.camelToSnake = (string) => {
+        return string.split(/(?=[A-Z])/).join('_').toLowerCase();
+    };
+    window.camelToSnakeObject = (object) => {
+        if (typeof (object ?? undefined) === 'undefined') {
+            return object;
+        }
+        const result = {};
+        Object.keys(object).forEach(key => {
+            if (Array.isArray(object[key])) {
+                result[window.camelToSnake(key)]
+                    = object[key].map((obj) => typeof obj !== 'object' ? obj : window.camelToSnakeObject(obj));
+            } else {
+                result[window.camelToSnake(key)]
+                    = typeof object[key] !== 'object' ? object[key] : window.camelToSnakeObject(object[key]);
+            }
+        });
+        return result;
+    };
 
     new Vue({
         el: '#app',
@@ -135,11 +186,14 @@
         axios,
         components: {
             // ExampleComponent,
-            CsvComponent
+            CsvComponent,
+            CsvImportParent,
+            // CsvImportChild,
+            ConditionComponent,
         }
     });
 </script>
-<!-- JavaScript Bundle with Popper -->
+<!-- JavaScript Bundle with Popper for Bootstrap -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js"
         integrity="sha384-MrcW6ZMFYlzcLA8Nl+NtUVF0sA7MsXsP1UyJoMp4YLEuNSfAP+JcXn/tWtIaxVXM"
         crossorigin="anonymous"></script>

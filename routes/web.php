@@ -14,5 +14,7 @@
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', static function () {
-    return view('vue');
-});
+    return view('import');
+})->name('top');
+
+Route::get('/condition', 'ConditionController')->name('condition');
