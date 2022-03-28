@@ -18,6 +18,7 @@ class CreateTablesTable extends Migration
             $table->string('name');
             $table->unsignedInteger('charset');
             $table->unsignedInteger('delimiter')->default(1);
+            $table->unsignedInteger('primary_col_index');
 
             $table->unsignedBigInteger('user_id');
 

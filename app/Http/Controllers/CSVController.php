@@ -80,6 +80,7 @@ class CSVController extends Controller
         $tableName = $request->get('csv_file_name');
         $charset = $request->get('charset');
         $headerColIndexList = $request->get('header_column_index_list');
+        $primaryColIndex = $request->get('primary_col_index');
         $encryptColumns = $request->get('encrypt_columns_index_list');
         $dataTypes = $request->get('data_types');
 
@@ -91,10 +92,11 @@ class CSVController extends Controller
 
             // tables テーブルに INSERT
             $newTable = $table->create([
-                'name'      => $tableName,
-                'charset'   => 1,
-                'delimiter' => 1,
-                'user_id'   => $userId,
+                'name'              => $tableName,
+                'charset'           => 1,
+                'delimiter'         => 1,
+                'primary_col_index' => $primaryColIndex,
+                'user_id'           => $userId,
             ]);
 
 
@@ -239,38 +241,6 @@ class CSVController extends Controller
                 $table->foreign('impoter_id')->references('id')->on('users');
             }
         );
-    }
-
-    /**
-     * tableN のための
-     * Eloquent Model
-     * @param $csvTableId
-     * @return Model
-     */
-    public static function tableModel($csvTableId): Model
-    {
-        $csvTable = Table::findOrFail($csvTableId);
-        $columns = Column::where('table_id', $csvTable->id)->get();
-        $modelName = self::TABLE_PREFIX . $csvTable->id;
-        $defaultFillable = [
-            'row',
-            'csv',
-            'import_ym',
-            'importer_id',
-        ];
-        $fillable = [];
-        foreach ($columns as $column) {
-            $fillable[] = self::COLUMN_PREFIX . $column->col_index;
-        }
-        return new class([$modelName, array_merge($fillable, $defaultFillable)]) extends Model {
-
-            public function __construct(array $attributes = [])
-            {
-                parent::__construct($attributes);
-                $this->table = $attributes[0];
-                $this->fillable = $attributes[1];
-            }
-        };
     }
 
     private function decimalType($columnName, $length = null): array
