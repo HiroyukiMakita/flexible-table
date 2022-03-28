@@ -1,5 +1,5 @@
 const template = `
-<div class="container">
+<div class="container text-center">
     <div class="title m-b-md" v-text="text"></div>
     <div class="mb-5">
         <span>
@@ -8,7 +8,7 @@ const template = `
         希望の列はフォーマットとして保存されます。
         </span>
     </div>
-    <div v-if="errorMessages.length > 0" class="mb-5 card alert-danger w-70 m-auto">
+    <div v-if="errorMessages.length > 0" class="mb-5 card alert-danger m-auto" style="width: 70%;">
         <div class="card-body w-30 m-auto" style="text-align: left;" >
             <template v-for="message in errorMessages" >
                 <span style="color: red;">{{ message }}</span>
@@ -116,6 +116,22 @@ const template = `
         </select>
     </div>
     <div class="mb-5" style="width: 70%;margin: auto;">
+        <h2>記録する項目名のうち、行を一意に識別できる項目</h2>
+        <select 
+            class="form-select" 
+            aria-label="Default select"  
+            v-model="primaryColumn" 
+        >
+            <option 
+                v-for="({value, colIndex}, index) in selectedHeaderColumns" 
+                :key="\`primary-set-\${colIndex}\`"
+                :value="{colIndex, value}"
+            >
+                {{ value }}
+            </option>
+        </select>
+    </div>
+    <div class="mb-5" style="width: 70%;margin: auto;">
         <h2>記録する項目名のうち、暗号化する項目を設定</h2>
         <span>※ Ctrl や Shift を押しながら複数選択可能（ライブラリ使わないならチェックボックスにしとけばよかった感）</span>
         <select 
@@ -137,6 +153,7 @@ const template = `
     </div>
     <div class="mb-5" style="width: 70%;margin: auto;">
         <h2>記録する項目（データ）ごとのデータタイプの変更</h2>
+        <span class="alert-danger d-block">※ 突合するとき範囲を設定できるように「日付」か「日時」は必須</span>
         <span>※ 現状「記録する項目」とか「暗号化する項目」をいじると値が消えたりしてしまうので<br>「アップロード」前に確認が必要。<br></span>
         <span>TODO: 値は消えないようにする</span>
             <table class="table mt-3">
@@ -278,13 +295,6 @@ export default defineComponent({
             }, []
         );
         const DATA_TYPES = ref({
-            // CHAR(length)
-            char: {label: '文字列（桁数指定）', type: 'char', length: 0, format: undefined},
-            /**
-             * VARCHAR(256) 暗号化
-             * MySQL の関数で暗号化すると 100 文字が 256 文字になる計算なので MAX 100 文字まで
-             */
-            secret: {label: '文字列（暗号化）', type: 'secret', length: 100, format: undefined},
             /** VARCHAR(191)
              * DB の charset が utf8mb4の場合、
              * MySQL v5.7.7 以下、MariaDB 10.2.2 以下では UNIQUE にできないので 191 しておく
@@ -292,6 +302,13 @@ export default defineComponent({
              * 暗号化関係なく、普通に文字列は 1 データ MAX 100 文字までで良いかも。
              */
             varchar: {label: '文字列', type: 'varchar', length: 191, format: undefined},
+            /**
+             * VARCHAR(256) 暗号化
+             * MySQL の関数で暗号化すると 100 文字が 256 文字になる計算なので MAX 100 文字まで
+             */
+            secret: {label: '文字列（暗号化）', type: 'secret', length: 100, format: undefined},
+            // CHAR(length)
+            char: {label: '文字列（桁数指定）', type: 'char', length: 0, format: undefined},
             // DECIMAL(65, 4)
             decimal: {label: '数値', type: 'decimal', length: {m: 65, d: 4}, format: undefined},
             // DATE
@@ -313,6 +330,7 @@ export default defineComponent({
         const csvText = ref('');
         const csvFileName = ref('');
         const selectedHeaderColumns = ref([]);
+        const primaryColumn = ref({});
         const selectedEncryptHeaderColumns = ref([]);
         const selectedDataType = ref([]);
         const selectedCharset = ref(CHARSETS.value['Shift-JIS']);
@@ -440,13 +458,13 @@ export default defineComponent({
 
                     csv.value = Papa.parse(documentValue, csvParseCinfig).data;
                     if (headerRecordNumber.value > 1) {
-                        const _csv = JSON.parse(JSON.stringify(csv.value));
+                        const _csv = cloneObject(csv.value);
                         [...Array(headerRecordNumber.value - 1)].forEach(
                             (_) => _csv.shift()
                         );
                         csv.value = _csv;
                     }
-                    const csvCache = JSON.parse(JSON.stringify(csv.value));
+                    const csvCache = cloneObject(csv.value);
                     tHead.value = csvCache.shift();
                     tBody.value = csvCache.length > 5 ? csvCache.slice(0, 5) : csvCache;
                     headers.value = formatHeaders(tHead.value, tBody.value);
@@ -493,6 +511,49 @@ export default defineComponent({
          */
         const headerColumns = computed(() => headers.value.map((header) => header.text));
 
+        const validateDayjs = (date, format) => dayjs(date, format).format(format) === date;
+
+        const dataTypeValidate = () => {
+            const records = csv.value.filter((_, index) => index > 0);
+            (selectedDataType.value.filter((_) => _)).forEach((column) => {
+                const label = (Object.values(DATA_TYPES.value).find((value) => value.type === column.type)).label;
+                if (['date', 'time', 'date'].includes(column?.type)) {
+                    if (records.some((record) =>
+                        !validateDayjs(record[column.colIndex], column.selectedFormat ?? ''))) {
+                        errorMessages.value.push(`※【${column.value}】は、${label}ではないか、フォーマットが間違っています`);
+                    }
+                }
+                if (column.type === 'decimal') {
+                    // データが非数かどうかバリデート（csv なのでそもそも文字列だと思うので） number 型かどうかは問わない
+                    if (records.some((record) => isNaN(record[column.colIndex]))) {
+                        errorMessages.value.push(`※【 ${column.value}】は、数値として設定できません`);
+                    }
+                }
+                if (column.type === 'char') {
+                    ((column.length ?? 0) < 1 || (column.length ?? 0) > 30)
+                        ? errorMessages.value.push(`※【${column.value}】に、桁数を正しく指定してください`)
+                        : records.some((record) => record[column.colIndex].length > column.length)
+                        && errorMessages.value.push(`※【${column.value}】のデータ${index + 1}行目が、指定された桁数を超えています`);
+                }
+                if (column.type === 'secret') {
+                    records.some((record, index) => record[column.colIndex].length > 100
+                        && errorMessages.value.push(`※【${column.value}】のデータ${index + 1}行目が、100文字を超えているため暗号化項目に指定できません`));
+                }
+                if (column.type === 'varchar') {
+                    records.some((record, index) => record[column.colIndex].length > 191
+                        && errorMessages.value.push(`※【${column.value}】のデータ${index + 1}行目が、191文字を超えているためデータをアップロードできません`));
+                }
+            });
+        };
+
+        const primaryColumnValidate = () => {
+            // const columnName = selectedHeaderColumns.value.find((column) => column.colIndex === primaryColumn.colIndex)[0].label;
+            const primaryColumnValues = csv.value.filter((_, index) => index > 0).map((record) => record[primaryColumn.value.colIndex]);
+            const uniqueValues = new Set(primaryColumnValues);
+            uniqueValues.size !== primaryColumnValues.length
+            && errorMessages.value.push(`※【${primaryColumn.value.value}】のデータには重複があるため一意に識別できる項目に指定できません`);
+        };
+
         /**
          * csv データ送信
          * @return {Promise<void>}
@@ -508,7 +569,22 @@ export default defineComponent({
             if (selectedHeaderColumns.value.length === 0) {
                 errorMessages.value.push('※ 記録する項目名を選択してください');
             }
+            // TODO: 行を一意に識別できる項目の null チェック
+            if (Object.values(primaryColumn.value).length === 0) {
+                errorMessages.value.push('※ 行を一意に識別できる項目を選択してください');
+            } else {
+                primaryColumnValidate();
+            }
+            if (!selectedDataType.value.some((column) => ['date', 'datetime'].includes(column?.type))) {
+                errorMessages.value.push('※ 「日付」か「日時」の項目が1つ以上必要です');
+            }
+            // TODO: 「年」が指定できる「日付」か「日時」のフォーマットを一意に識別できる項目の null チェック
+            if (selectedDataType.value.some((column) => !/^.*Y.*$/.test(column?.selectedFormat ?? ''))) {
+                errorMessages.value.push('※ 「年」が指定できる「日付」か「日時」のフォーマットが1つ以上必要です');
+            }
+            dataTypeValidate();
             if (errorMessages.value.length > 0) {
+                window.scrollTo(0, 0);
                 return;
             }
 
@@ -518,6 +594,7 @@ export default defineComponent({
                 csv: csv.value,
                 csv_text: csvText.value,
                 header_column_index_list: selectedHeaderColumns.value.map((column) => column.colIndex),
+                primary_col_index: primaryColumn.value.colIndex,
                 encrypt_columns_index_list: selectedEncryptHeaderColumns.value.map((column) => column.colIndex),
                 data_types: selectedDataType.value.filter((column) => typeof (column ?? undefined) !== 'undefined'),
             });
@@ -527,7 +604,7 @@ export default defineComponent({
             console.log(response);
         };
 
-        // for debug CompositionAPI は VueDevtools 見れない
+        // for debug CompositionAPI は VueDevtools 見れない（beta 版で試したけど props しか見れない）
         // watch(selectedHeaderColumns, () => console.log('selectedHeaderColumns: ', JSON.stringify(selectedHeaderColumns.value, null, '\t')));
         // watch(selectedDataType, () => console.log('selectedDataType: ', JSON.stringify(selectedDataType.value, null, '\t')), {deep: true});
         watch(selectedHeaderColumns, () => {
@@ -619,6 +696,10 @@ export default defineComponent({
             return Object.is(obj1, obj2);
         };
 
+        watch(primaryColumn, () => {
+            console.log(primaryColumn.value.colIndex);
+        }, {deep: true});
+
         return {
             DATA_TYPES,
             CHARSETS,
@@ -633,6 +714,7 @@ export default defineComponent({
             headers,
             headerColumns,
             selectedHeaderColumns,
+            primaryColumn,
             selectedEncryptHeaderColumns,
             selectedDataType,
             bodies,
